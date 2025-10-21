@@ -1,4 +1,4 @@
-// Dice arithmetic success probability simulator (targets as rows, dice as columns)
+// Dice arithmetic success probability simulator with progress logging
 function simulateDiceTargets({
   trials = 1000,
   xMin = 1,
@@ -17,27 +17,24 @@ function simulateDiceTargets({
     [101, 103, 107],
   ];
 
-  // Select how many target sets to use
   const targetsList = allTargets.slice(0, numTargetSets);
+  const totalJobs = (xMax - xMin + 1) * targetsList.length;
+  let completedJobs = 0;
 
-  // Roll x d6 dice
   function rollDice(x) {
     return Array.from({ length: x }, () => Math.floor(Math.random() * 6) + 1);
   }
 
-  // Recursive solver: can we reach target from numbers?
   function canMakeTarget(numbers, target, memo = new Map()) {
     const key = numbers.slice().sort().join(",") + ":" + target;
     if (memo.has(key)) return memo.get(key);
 
-    // Base case
     if (numbers.length === 1) {
       const result = Math.abs(numbers[0] - target) < 1e-9;
       memo.set(key, result);
       return result;
     }
 
-    // Try all pairs and operations
     for (let i = 0; i < numbers.length; i++) {
       for (let j = 0; j < numbers.length; j++) {
         if (i === j) continue;
@@ -57,18 +54,22 @@ function simulateDiceTargets({
         }
       }
     }
-
     memo.set(key, false);
     return false;
   }
 
-  // Run simulations
-  const results = new Map(); // key: `${targetSet}|${x}`, value: probability
+  const results = new Map();
+
+  // ---- Simulation Loop with Progress ----
+  console.log(`\n🚀 Starting simulation with ${trials} trials per combination...`);
+  const startTime = Date.now();
 
   for (const targets of targetsList) {
     for (let x = xMin; x <= xMax; x++) {
-      let successCount = 0;
+      const label = `[${targets.join(", ")}] vs ${x}d6`;
+      process.stdout.write(`\rRunning ${label.padEnd(30)} ... `);
 
+      let successCount = 0;
       for (let t = 0; t < trials; t++) {
         const rolls = rollDice(x);
         for (const target of targets) {
@@ -81,11 +82,18 @@ function simulateDiceTargets({
 
       const probability = (successCount / trials) * 100;
       results.set(`${targets.join(",")}|${x}`, probability);
+
+      completedJobs++;
+      const percent = ((completedJobs / totalJobs) * 100).toFixed(1);
+      process.stdout.write(`Done (${percent}% complete)\n`);
     }
   }
 
-  // Markdown-style table output (Y = rows, X = columns)
-  console.log(`\n### 🎲 Dice Arithmetic Success Probabilities`);
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`\n✅ Simulation complete in ${duration}s.\n`);
+
+  // ---- Output Table (Y = Targets, X = Dice) ----
+  console.log(`### 🎲 Dice Arithmetic Success Probabilities`);
   console.log(`Trials per combination: **${trials}**`);
   console.log(`Dice tested: **${xMin}–${xMax}d6**`);
   console.log(`Target sets used: **${numTargetSets}**\n`);
@@ -106,13 +114,13 @@ function simulateDiceTargets({
     console.log(`| ${row.join(" | ")} |`);
   }
 
-  console.log("\n✅ Simulation complete.\n");
+  console.log();
 }
 
 // Example usage:
 simulateDiceTargets({
-  trials: 1000,     // number of trials per (x, y)
-  xMin: 1,          // lowest number of dice
-  xMax: 5,          // highest number of dice
-  numTargetSets: 4, // number of y groups to test (from the top)
+  trials: 500,  // adjust for performance
+  xMin: 1,
+  xMax: 5,
+  numTargetSets: 3,
 });
