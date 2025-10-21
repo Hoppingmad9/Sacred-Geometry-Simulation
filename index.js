@@ -1,13 +1,14 @@
-// Dice arithmetic simulator with persistent cache storage (JSON)
+// Dice arithmetic simulator with binary compressed cache (gzip)
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
 
 function simulateDiceTargets({
   trials = 1000,
   xMin = 1,
   xMax = 10,
   numTargetSets = 9,
-  cacheFile = "dice_cache.json",
+  cacheFile = "dice_cache.bin.gz",
 } = {}) {
   const allTargets = [
     [3, 5, 7],
@@ -25,30 +26,40 @@ function simulateDiceTargets({
   const totalJobs = (xMax - xMin + 1) * targetsList.length;
   let completedJobs = 0;
 
-  // 📂 Load persistent cache if it exists
+  // --- Binary compressed cache loading ---
   let globalCache = new Map();
-  if (fs.existsSync(cacheFile)) {
+
+  function loadCache() {
+    if (!fs.existsSync(cacheFile)) return;
     try {
-      const raw = fs.readFileSync(cacheFile, "utf8");
-      const parsed = JSON.parse(raw);
+      const compressed = fs.readFileSync(cacheFile);
+      const jsonStr = zlib.gunzipSync(compressed).toString("utf8");
+      const parsed = JSON.parse(jsonStr);
       globalCache = new Map(Object.entries(parsed));
-      console.log(`💾 Loaded cache with ${globalCache.size} entries from ${cacheFile}`);
+      console.log(`💾 Loaded ${globalCache.size} cached entries from ${cacheFile}`);
     } catch (err) {
-      console.warn(`⚠️ Failed to load cache file: ${err.message}`);
+      console.warn(`⚠️ Failed to load cache: ${err.message}`);
     }
   }
 
   function saveCache() {
-    const obj = Object.fromEntries(globalCache);
-    fs.writeFileSync(cacheFile, JSON.stringify(obj), "utf8");
-    console.log(`💾 Saved ${globalCache.size} cached results to ${cacheFile}`);
+    try {
+      const obj = Object.fromEntries(globalCache);
+      const jsonStr = JSON.stringify(obj);
+      const compressed = zlib.gzipSync(jsonStr);
+      fs.writeFileSync(cacheFile, compressed);
+      console.log(`💾 Saved ${globalCache.size} entries (compressed) to ${cacheFile}`);
+    } catch (err) {
+      console.error(`❌ Failed to save cache: ${err.message}`);
+    }
   }
+
+  loadCache();
 
   function rollDice(x) {
     return Array.from({ length: x }, () => Math.floor(Math.random() * 6) + 1);
   }
 
-  // Recursive solver with memo + global cache
   function canMakeTarget(numbers, target, memo = new Map()) {
     const sorted = numbers.slice().sort();
     const key = sorted.join(",") + "|" + target;
@@ -137,7 +148,6 @@ function simulateDiceTargets({
   console.log(`\n✅ Simulation complete in ${duration}s.`);
   console.log(`💾 Cache size now: ${globalCache.size}\n`);
 
-  // Save cache to disk at the end
   saveCache();
 
   // ---- Output Table (Y = Targets, X = Dice) ----
@@ -171,5 +181,5 @@ simulateDiceTargets({
   xMin: 1,
   xMax: 5,
   numTargetSets: 3,
-  cacheFile: path.join(__dirname, "dice_cache.json"),
+  cacheFile: path.join(__dirname, "dice_cache.bin.gz"),
 });
