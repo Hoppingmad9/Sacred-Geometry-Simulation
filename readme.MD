@@ -1,8 +1,8 @@
 # Setup
-Run with node v22, probably will work with node v16+.
-Run index.js in main for the default simulation.
-Run index.js in the "2_constant_success" branch to test requiring being able to sum to 2 of the constants for a success. You can modify line 209 from "2" to "3" to check requiring a sum to all 3 constants.
-The "multithreading" branch doesn't work.
+ - Run with node v22, probably will work with node v16+.
+ - Run index.js in main for the default simulation.
+ - Run index.js in the "2_constant_success" branch to test requiring being able to sum to 2 of the constants for a success. You can modify line 209 from "2" to "3" to check requiring a sum to all 3 constants.
+ - The "multithreading" branch doesn't work.
 
 # Results
 
