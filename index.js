@@ -196,7 +196,7 @@ function simulateDiceTargets({
 simulateDiceTargets({
   trials: 500,
   xMin: 1,
-  xMax: 5,
-  numTargetSets: 3,
+  xMax: 9,
+  numTargetSets: 9,
   cacheFile: path.join(__dirname, "dice_cache.bin.gz"),
 });
