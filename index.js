@@ -58,15 +58,32 @@ function simulateDiceTargets({
     const gzip = zlib.createGzip();
     const out = fs.createWriteStream(cacheFile);
     const stream = gzip.pipe(out);
-    stream.on("finish", () => console.log(`💾 Stream-saved cache to ${cacheFile}`));
+
+    const total = globalCache.size;
+    let written = 0;
+    const start = Date.now();
+    const updateEvery = Math.max(10_000, Math.floor(total / 100)); // update roughly every 1%
+
+    console.log(`💾 Stream-saving ${total.toLocaleString()} cache entries to ${cacheFile}...`);
+
+    // Write each entry line-by-line
     for (const [key, val] of globalCache) {
       gzip.write(JSON.stringify([key, val]) + "\n");
+      written++;
+      if (written % updateEvery === 0 || written === total) {
+        const pct = ((written / total) * 100).toFixed(1);
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+        process.stdout.write(`\r   ${pct}%  (${written.toLocaleString()}/${total.toLocaleString()})  ⏱️ ${elapsed}s`);
+      }
     }
+
     gzip.end();
 
     stream.on("finish", () => {
-      console.log(`💾 Stream-saved ${globalCache.size.toLocaleString()} entries to ${cacheFile}`);
-      process.exit(0); // ✅ exit cleanly once done
+      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+      process.stdout.write(`\r   100.0%  (${total.toLocaleString()}/${total.toLocaleString()})  ⏱️ ${elapsed}s\n`);
+      console.log(`✅ Stream-saved ${total.toLocaleString()} entries to ${cacheFile}`);
+      process.exit(0); // exit cleanly once done
     });
 
     stream.on("error", (err) => {
@@ -206,7 +223,7 @@ function simulateDiceTargets({
 simulateDiceTargets({
   trials: 500,
   xMin: 1,
-  xMax: 9,
+  xMax: 7,
   numTargetSets: 9,
   cacheFile: path.join(__dirname, "dice_cache.bin.gz"),
 });
