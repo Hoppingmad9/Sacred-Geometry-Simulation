@@ -1,8 +1,13 @@
+// Dice arithmetic simulator with persistent cache storage (JSON)
+const fs = require("fs");
+const path = require("path");
+
 function simulateDiceTargets({
   trials = 1000,
   xMin = 1,
   xMax = 10,
   numTargetSets = 9,
+  cacheFile = "dice_cache.json",
 } = {}) {
   const allTargets = [
     [3, 5, 7],
@@ -20,8 +25,24 @@ function simulateDiceTargets({
   const totalJobs = (xMax - xMin + 1) * targetsList.length;
   let completedJobs = 0;
 
-  // ✅ Global cache of feasibility only (not trial results)
-  const globalCache = new Map(); // key: "sorted_roll|target" => true/false
+  // 📂 Load persistent cache if it exists
+  let globalCache = new Map();
+  if (fs.existsSync(cacheFile)) {
+    try {
+      const raw = fs.readFileSync(cacheFile, "utf8");
+      const parsed = JSON.parse(raw);
+      globalCache = new Map(Object.entries(parsed));
+      console.log(`💾 Loaded cache with ${globalCache.size} entries from ${cacheFile}`);
+    } catch (err) {
+      console.warn(`⚠️ Failed to load cache file: ${err.message}`);
+    }
+  }
+
+  function saveCache() {
+    const obj = Object.fromEntries(globalCache);
+    fs.writeFileSync(cacheFile, JSON.stringify(obj), "utf8");
+    console.log(`💾 Saved ${globalCache.size} cached results to ${cacheFile}`);
+  }
 
   function rollDice(x) {
     return Array.from({ length: x }, () => Math.floor(Math.random() * 6) + 1);
@@ -82,8 +103,6 @@ function simulateDiceTargets({
       for (let t = 0; t < trials; t++) {
         const rolls = rollDice(x);
         const rollKey = rolls.slice().sort().join(",");
-
-        // ✅ For this trial, success = any target true
         let successThisTrial = false;
 
         for (const target of targets) {
@@ -116,7 +135,10 @@ function simulateDiceTargets({
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n✅ Simulation complete in ${duration}s.`);
-  console.log(`💾 Cached combinations: ${globalCache.size}\n`);
+  console.log(`💾 Cache size now: ${globalCache.size}\n`);
+
+  // Save cache to disk at the end
+  saveCache();
 
   // ---- Output Table (Y = Targets, X = Dice) ----
   console.log(`### 🎲 Dice Arithmetic Success Probabilities`);
@@ -148,5 +170,6 @@ simulateDiceTargets({
   trials: 500,
   xMin: 1,
   xMax: 5,
-  numTargetSets: 4,
+  numTargetSets: 3,
+  cacheFile: path.join(__dirname, "dice_cache.json"),
 });
