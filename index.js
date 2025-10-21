@@ -148,7 +148,12 @@ function simulateDiceTargets({
   console.log(`\n✅ Simulation complete in ${duration}s.`);
   console.log(`💾 Cache size now: ${globalCache.size}\n`);
 
-  saveCache();
+  if (globalCache.size < 1_000_000) {
+    saveCache();
+  } else {
+    console.log(`⚠️ Cache too large (${globalCache.size.toLocaleString()} entries) — not saving`);
+  }
+
 
   // ---- Output Table (Y = Targets, X = Dice) ----
   console.log(`### 🎲 Dice Arithmetic Success Probabilities`);
