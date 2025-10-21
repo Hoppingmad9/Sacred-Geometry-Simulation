@@ -1,4 +1,4 @@
-// Dice arithmetic success probability simulator (configurable version)
+// Dice arithmetic success probability simulator (targets as rows, dice as columns)
 function simulateDiceTargets({
   trials = 1000,
   xMin = 1,
@@ -63,10 +63,10 @@ function simulateDiceTargets({
   }
 
   // Run simulations
-  const results = [];
+  const results = new Map(); // key: `${targetSet}|${x}`, value: probability
 
-  for (let x = xMin; x <= xMax; x++) {
-    for (const targets of targetsList) {
+  for (const targets of targetsList) {
+    for (let x = xMin; x <= xMax; x++) {
       let successCount = 0;
 
       for (let t = 0; t < trials; t++) {
@@ -80,42 +80,32 @@ function simulateDiceTargets({
       }
 
       const probability = (successCount / trials) * 100;
-      results.push({
-        x,
-        targets: `[${targets.join(", ")}]`,
-        probability,
-      });
+      results.set(`${targets.join(",")}|${x}`, probability);
     }
   }
 
-  // Markdown-style table output
+  // Markdown-style table output (Y = rows, X = columns)
   console.log(`\n### 🎲 Dice Arithmetic Success Probabilities`);
   console.log(`Trials per combination: **${trials}**`);
   console.log(`Dice tested: **${xMin}–${xMax}d6**`);
   console.log(`Target sets used: **${numTargetSets}**\n`);
 
-  const headers = ["x \\ Targets", ...targetsList.map(t => `[${t.join(", ")}]`)];
-  const tableRows = [];
-
-  for (let x = xMin; x <= xMax; x++) {
-    const row = [`**${x}d6**`];
-    for (const targets of targetsList) {
-      const entry = results.find(
-        r => r.x === x && r.targets === `[${targets.join(", ")}]`
-      );
-      row.push(entry ? `${entry.probability.toFixed(1)}%` : "—");
-    }
-    tableRows.push(row);
-  }
-
-  // Build Markdown table
+  const headers = ["Targets \\ Dice", ...Array.from({ length: xMax - xMin + 1 }, (_, i) => `**${xMin + i}d6**`)];
   const headerLine = `| ${headers.join(" | ")} |`;
   const separatorLine = `| ${headers.map(() => "---").join(" | ")} |`;
   console.log(headerLine);
   console.log(separatorLine);
-  for (const row of tableRows) {
+
+  for (const targets of targetsList) {
+    const row = [`[${targets.join(", ")}]`];
+    for (let x = xMin; x <= xMax; x++) {
+      const key = `${targets.join(",")}|${x}`;
+      const prob = results.get(key);
+      row.push(prob !== undefined ? `${prob.toFixed(1)}%` : "—");
+    }
     console.log(`| ${row.join(" | ")} |`);
   }
+
   console.log("\n✅ Simulation complete.\n");
 }
 
@@ -124,5 +114,5 @@ simulateDiceTargets({
   trials: 1000,     // number of trials per (x, y)
   xMin: 1,          // lowest number of dice
   xMax: 5,          // highest number of dice
-  numTargetSets: 3, // number of y groups to test (from the top)
+  numTargetSets: 4, // number of y groups to test (from the top)
 });
