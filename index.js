@@ -63,6 +63,16 @@ function simulateDiceTargets({
       gzip.write(JSON.stringify([key, val]) + "\n");
     }
     gzip.end();
+
+    stream.on("finish", () => {
+      console.log(`💾 Stream-saved ${globalCache.size.toLocaleString()} entries to ${cacheFile}`);
+      process.exit(0); // ✅ exit cleanly once done
+    });
+
+    stream.on("error", (err) => {
+      console.error(`❌ Stream save failed: ${err.message}`);
+      process.exit(1);
+    });
   }
 
   loadCache();
