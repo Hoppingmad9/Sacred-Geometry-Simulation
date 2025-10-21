@@ -1,4 +1,3 @@
-// Dice arithmetic success probability simulator with progress logging
 function simulateDiceTargets({
   trials = 1000,
   xMin = 1,
@@ -21,17 +20,24 @@ function simulateDiceTargets({
   const totalJobs = (xMax - xMin + 1) * targetsList.length;
   let completedJobs = 0;
 
+  // ✅ Global cache of feasibility only (not trial results)
+  const globalCache = new Map(); // key: "sorted_roll|target" => true/false
+
   function rollDice(x) {
     return Array.from({ length: x }, () => Math.floor(Math.random() * 6) + 1);
   }
 
+  // Recursive solver with memo + global cache
   function canMakeTarget(numbers, target, memo = new Map()) {
-    const key = numbers.slice().sort().join(",") + ":" + target;
+    const sorted = numbers.slice().sort();
+    const key = sorted.join(",") + "|" + target;
+    if (globalCache.has(key)) return globalCache.get(key);
     if (memo.has(key)) return memo.get(key);
 
     if (numbers.length === 1) {
       const result = Math.abs(numbers[0] - target) < 1e-9;
       memo.set(key, result);
+      globalCache.set(key, result);
       return result;
     }
 
@@ -49,18 +55,20 @@ function simulateDiceTargets({
         for (const val of nextValues) {
           if (canMakeTarget([...rest, val], target, memo)) {
             memo.set(key, true);
+            globalCache.set(key, true);
             return true;
           }
         }
       }
     }
+
     memo.set(key, false);
+    globalCache.set(key, false);
     return false;
   }
 
   const results = new Map();
 
-  // ---- Simulation Loop with Progress ----
   console.log(`\n🚀 Starting simulation with ${trials} trials per combination...`);
   const startTime = Date.now();
 
@@ -70,14 +78,31 @@ function simulateDiceTargets({
       process.stdout.write(`\rRunning ${label.padEnd(30)} ... `);
 
       let successCount = 0;
+
       for (let t = 0; t < trials; t++) {
         const rolls = rollDice(x);
+        const rollKey = rolls.slice().sort().join(",");
+
+        // ✅ For this trial, success = any target true
+        let successThisTrial = false;
+
         for (const target of targets) {
-          if (canMakeTarget([...rolls], target)) {
-            successCount++;
+          const key = rollKey + "|" + target;
+          if (globalCache.has(key)) {
+            if (globalCache.get(key)) {
+              successThisTrial = true;
+              break;
+            }
+          } else if (canMakeTarget([...rolls], target)) {
+            globalCache.set(key, true);
+            successThisTrial = true;
             break;
+          } else {
+            globalCache.set(key, false);
           }
         }
+
+        if (successThisTrial) successCount++;
       }
 
       const probability = (successCount / trials) * 100;
@@ -90,7 +115,8 @@ function simulateDiceTargets({
   }
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`\n✅ Simulation complete in ${duration}s.\n`);
+  console.log(`\n✅ Simulation complete in ${duration}s.`);
+  console.log(`💾 Cached combinations: ${globalCache.size}\n`);
 
   // ---- Output Table (Y = Targets, X = Dice) ----
   console.log(`### 🎲 Dice Arithmetic Success Probabilities`);
@@ -117,10 +143,10 @@ function simulateDiceTargets({
   console.log();
 }
 
-// Example usage:
+// Example usage
 simulateDiceTargets({
-  trials: 500,  // adjust for performance
+  trials: 500,
   xMin: 1,
   xMax: 5,
-  numTargetSets: 3,
+  numTargetSets: 4,
 });
