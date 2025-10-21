@@ -54,6 +54,17 @@ function simulateDiceTargets({
     }
   }
 
+  function saveCacheStream() {
+    const gzip = zlib.createGzip();
+    const out = fs.createWriteStream(cacheFile);
+    const stream = gzip.pipe(out);
+    stream.on("finish", () => console.log(`💾 Stream-saved cache to ${cacheFile}`));
+    for (const [key, val] of globalCache) {
+      gzip.write(JSON.stringify([key, val]) + "\n");
+    }
+    gzip.end();
+  }
+
   loadCache();
 
   function rollDice(x) {
@@ -151,7 +162,8 @@ function simulateDiceTargets({
   if (globalCache.size < 1_000_000) {
     saveCache();
   } else {
-    console.log(`⚠️ Cache too large (${globalCache.size.toLocaleString()} entries) — not saving`);
+    console.log(`⚠️ Cache too large (${globalCache.size.toLocaleString()} entries) — stream saving`);
+    saveCacheStream();
   }
 
 
