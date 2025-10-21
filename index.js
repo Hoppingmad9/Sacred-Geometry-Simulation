@@ -44,52 +44,89 @@ function simulateDiceTargets({
 
   function saveCache() {
     try {
-      const obj = Object.fromEntries(globalCache);
+      // 1️⃣  Load existing cache (if any)
+      let existing = new Map();
+      if (fs.existsSync(cacheFile)) {
+        const compressed = fs.readFileSync(cacheFile);
+        const jsonStr = zlib.gunzipSync(compressed).toString("utf8");
+        existing = new Map(Object.entries(JSON.parse(jsonStr)));
+        console.log(`📂 Merging with existing cache (${existing.size.toLocaleString()} entries)`);
+      }
+
+      // 2️⃣  Merge: overwrite or add new entries
+      for (const [k, v] of globalCache) existing.set(k, v);
+
+      // 3️⃣  Save merged result
+      const obj = Object.fromEntries(existing);
       const jsonStr = JSON.stringify(obj);
-      const compressed = zlib.gzipSync(jsonStr);
+      const compressed = zlib.gzipSync(jsonStr, { level: 1 }); // faster
       fs.writeFileSync(cacheFile, compressed);
-      console.log(`💾 Saved ${globalCache.size} entries (compressed) to ${cacheFile}`);
+
+      console.log(
+        `💾 Saved merged cache (${existing.size.toLocaleString()} total entries, compressed) to ${cacheFile}`
+      );
     } catch (err) {
-      console.error(`❌ Failed to save cache: ${err.message}`);
+      console.error(`❌ Failed to merge+save cache: ${err.message}`);
     }
   }
 
   function saveCacheStream() {
-    const gzip = zlib.createGzip();
-    const out = fs.createWriteStream(cacheFile);
-    const stream = gzip.pipe(out);
-
-    const total = globalCache.size;
-    let written = 0;
-    const start = Date.now();
-    const updateEvery = Math.max(10_000, Math.floor(total / 100)); // update roughly every 1%
-
-    console.log(`💾 Stream-saving ${total.toLocaleString()} cache entries to ${cacheFile}...`);
-
-    // Write each entry line-by-line
-    for (const [key, val] of globalCache) {
-      gzip.write(JSON.stringify([key, val]) + "\n");
-      written++;
-      if (written % updateEvery === 0 || written === total) {
-        const pct = ((written / total) * 100).toFixed(1);
-        const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-        process.stdout.write(`\r   ${pct}%  (${written.toLocaleString()}/${total.toLocaleString()})  ⏱️ ${elapsed}s`);
+    try {
+      // 1️⃣ Load existing cache first
+      let existing = new Map();
+      if (fs.existsSync(cacheFile)) {
+        const compressed = fs.readFileSync(cacheFile);
+        const jsonStr = zlib.gunzipSync(compressed).toString("utf8");
+        existing = new Map(Object.entries(JSON.parse(jsonStr)));
+        console.log(`📂 Merging with existing cache (${existing.size.toLocaleString()} entries)`);
       }
+
+      // 2️⃣ Merge new results into existing cache
+      for (const [k, v] of globalCache) existing.set(k, v);
+
+      const total = existing.size;
+      const start = Date.now();
+      const updateEvery = Math.max(10_000, Math.floor(total / 100)); // ~1 %
+
+      console.log(`💾 Stream-saving merged cache (${total.toLocaleString()} entries) to ${cacheFile}...`);
+
+      // 3️⃣ Stream save merged cache
+      const gzip = zlib.createGzip({ level: 1 }); // fast compression
+      const out = fs.createWriteStream(cacheFile);
+      const stream = gzip.pipe(out);
+
+      let written = 0;
+      for (const [key, val] of existing) {
+        gzip.write(JSON.stringify([key, val]) + "\n");
+        written++;
+        if (written % updateEvery === 0 || written === total) {
+          const pct = ((written / total) * 100).toFixed(1);
+          const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+          process.stdout.write(
+            `\r   ${pct}%  (${written.toLocaleString()}/${total.toLocaleString()})  ⏱️ ${elapsed}s`
+          );
+        }
+      }
+
+      gzip.end();
+
+      gzip.on("end", () => out.end());
+      out.on("finish", () => {
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+        process.stdout.write(
+          `\r   100.0%  (${total.toLocaleString()}/${total.toLocaleString()})  ⏱️ ${elapsed}s\n`
+        );
+        console.log(`✅ Stream-saved merged cache (${total.toLocaleString()} entries) to ${cacheFile}`);
+        out.close(() => process.exit(0));
+      });
+
+      out.on("error", (err) => {
+        console.error(`❌ Stream save failed: ${err.message}`);
+        process.exit(1);
+      });
+    } catch (err) {
+      console.error(`❌ Failed to stream-merge cache: ${err.message}`);
     }
-
-    gzip.end();
-
-    stream.on("finish", () => {
-      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-      process.stdout.write(`\r   100.0%  (${total.toLocaleString()}/${total.toLocaleString()})  ⏱️ ${elapsed}s\n`);
-      console.log(`✅ Stream-saved ${total.toLocaleString()} entries to ${cacheFile}`);
-      process.exit(0); // exit cleanly once done
-    });
-
-    stream.on("error", (err) => {
-      console.error(`❌ Stream save failed: ${err.message}`);
-      process.exit(1);
-    });
   }
 
   loadCache();
@@ -186,7 +223,7 @@ function simulateDiceTargets({
   console.log(`\n✅ Simulation complete in ${duration}s.`);
   console.log(`💾 Cache size now: ${globalCache.size}\n`);
 
-  if (globalCache.size < 1_000_000) {
+  if (globalCache.size < 4_000_000) {
     saveCache();
   } else {
     console.log(`⚠️ Cache too large (${globalCache.size.toLocaleString()} entries) — stream saving`);
@@ -223,7 +260,7 @@ function simulateDiceTargets({
 simulateDiceTargets({
   trials: 500,
   xMin: 1,
-  xMax: 7,
-  numTargetSets: 9,
+  xMax: 3,
+  numTargetSets: 3,
   cacheFile: path.join(__dirname, "dice_cache.bin.gz"),
 });
